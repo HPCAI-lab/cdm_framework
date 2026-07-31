@@ -1,0 +1,91 @@
+
+==============================================================================
+SIMULATED DATA — PIPELINE DEMONSTRATION (not empirical findings)
+==============================================================================
+
+Simulated sample: N = 30  ({'Business': 10, 'HealthSciences': 10, 'Humanities': 10})
+Design parameters grounded in slides + measurement theory; statistics below
+are emergent properties of the SIMULATED data, demonstrating the pipeline.
+
+------------------------------------------------------------------------------
+1. MANOVA  (discipline -> 5 CDM dimensions)
+------------------------------------------------------------------------------
+   Wilks' lambda = 0.108   F(10,46) = 9.39   p = 3.016e-08
+
+------------------------------------------------------------------------------
+2. Per-dimension ANOVA + Tukey HSD + partial eta^2
+------------------------------------------------------------------------------
+   PromptEngineering          F =  10.61  p = 0.0003988  partial_eta^2 = 0.440
+              Business vs HealthSciences diff=-0.77  p_adj=0.0353 *
+              Business vs Humanities     diff=-1.33  p_adj=0.0003 *
+        HealthSciences vs Humanities     diff=-0.57  p_adj=0.144  
+   ProblemDecomposition       F =   1.81  p =    0.1829  partial_eta^2 = 0.118
+              Business vs HealthSciences diff=+0.03  p_adj=0.996  
+              Business vs Humanities     diff=-0.63  p_adj=0.261  
+        HealthSciences vs Humanities     diff=-0.67  p_adj=0.228  
+   OutputValidation           F =   9.15  p = 0.0009272  partial_eta^2 = 0.404
+              Business vs HealthSciences diff=+1.03  p_adj=0.0011 *
+              Business vs Humanities     diff=+0.20  p_adj=0.718  
+        HealthSciences vs Humanities     diff=-0.83  p_adj=0.0084 *
+   EthicalIntegration         F =   4.72  p =   0.01751  partial_eta^2 = 0.259
+              Business vs HealthSciences diff=+0.93  p_adj=0.0151 *
+              Business vs Humanities     diff=+0.63  p_adj=0.122  
+        HealthSciences vs Humanities     diff=-0.30  p_adj=0.603  
+   CollaborativeSensemaking   F =  11.23  p = 0.0002825  partial_eta^2 = 0.454
+              Business vs HealthSciences diff=+0.13  p_adj=0.881  
+              Business vs Humanities     diff=+1.20  p_adj=0.0005 *
+        HealthSciences vs Humanities     diff=+1.07  p_adj=0.0019 *
+
+------------------------------------------------------------------------------
+3. Internal consistency (Cronbach's alpha, per dimension)
+------------------------------------------------------------------------------
+   PromptEngineering          alpha = 0.777   [OK >=0.75]
+   ProblemDecomposition       alpha = 0.870   [OK >=0.75]
+   OutputValidation           alpha = 0.790   [OK >=0.75]
+   EthicalIntegration         alpha = 0.853   [OK >=0.75]
+   CollaborativeSensemaking   alpha = 0.855   [OK >=0.75]
+
+------------------------------------------------------------------------------
+4. Inter-rater reliability (3 coders; quadratic-weighted kappa + Krippendorff alpha, interval)
+------------------------------------------------------------------------------
+   PromptEngineering          weighted kappa = 0.878   Krippendorff alpha = 0.881
+   ProblemDecomposition       weighted kappa = 0.819   Krippendorff alpha = 0.818
+   OutputValidation           weighted kappa = 0.806   Krippendorff alpha = 0.807
+   EthicalIntegration         weighted kappa = 0.879   Krippendorff alpha = 0.879
+   CollaborativeSensemaking   weighted kappa = 0.859   Krippendorff alpha = 0.859
+
+------------------------------------------------------------------------------
+5. Confirmatory Factor Analysis (5-factor model)
+------------------------------------------------------------------------------
+   [pilot scale, N=30]  CFI = 0.477   RMSEA = 0.192
+   A 25-indicator 5-factor CFA needs N well above 30; this is why the
+   proposal scales to N=120+. Same pipeline on a larger SIMULATED draw:
+   [proposed scale (simulated), N=240]  CFI = 0.991   RMSEA = 0.018
+
+------------------------------------------------------------------------------
+6. Criterion validity (CDM total vs external outcomes)
+------------------------------------------------------------------------------
+   CDM_total vs discipline GPA   r = +0.383   p = 0.03695
+   CDM_total vs AI task grade    r = +0.495   p = 0.005417
+
+------------------------------------------------------------------------------
+7. Test-retest reliability (ICC(2,1))
+------------------------------------------------------------------------------
+   PromptEngineering          ICC(2,1) = 0.779
+   ProblemDecomposition       ICC(2,1) = 0.681
+   OutputValidation           ICC(2,1) = 0.896
+   EthicalIntegration         ICC(2,1) = 0.701
+   CollaborativeSensemaking   ICC(2,1) = 0.717
+
+------------------------------------------------------------------------------
+8. Think-aloud code distribution (qualitative stream)
+------------------------------------------------------------------------------
+   Business         dominant: PROMPT_REFINE (43%)   PROMPT_REFINE:43% DECOMPOSE:19% COLLAB_EXPLAIN:17% EVAL_DOUBT:16% ETHICAL_FLAG:5%
+   HealthSciences   dominant: EVAL_DOUBT (43%)   EVAL_DOUBT:43% COLLAB_EXPLAIN:16% PROMPT_REFINE:15% DECOMPOSE:14% ETHICAL_FLAG:12%
+   Humanities       dominant: COLLAB_EXPLAIN (33%)   COLLAB_EXPLAIN:33% DECOMPOSE:27% PROMPT_REFINE:15% EVAL_DOUBT:14% ETHICAL_FLAG:11%
+
+==============================================================================
+SIMULATED DATA — PIPELINE DEMONSTRATION (not empirical findings)
+Replace model_core.simulate() with real collected data (same columns) to produce
+actual results — the pipeline is unchanged.
+==============================================================================

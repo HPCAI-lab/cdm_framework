@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this pipeline, please cite it as below."
+title: "CDM Analysis Pipeline: A Measurement-Validation Framework for Cognitive Diversity Metrics"
+abstract: >-
+  A reproducible analysis pipeline for validating the Cognitive Diversity
+  Metrics (CDM) instrument, comprising a declared generative model, ordinal
+  inter-rater agreement statistics, and a full psychometric analysis
+  (MANOVA, internal consistency, inter-rater reliability, confirmatory factor
+  analysis, criterion validity, and test-retest reliability). Distributed with
+  a simulated demonstration dataset; no participant data are included.
+type: software
+version: "1.0.0"
+date-released: "2026-07-31"
+license: MIT
+authors:
+  - family-names: Emad-ud-din
+    given-names: Muhammad
+    affiliation: "HPC-AI Laboratory, The University of Texas at Tyler"
+  - family-names: Saravanan
+    given-names: Vijayalakshmi
+    affiliation: "HPC-AI Laboratory, The University of Texas at Tyler"
+keywords:
+  - cognitive diversity metrics
+  - psychometrics
+  - measurement validation
+  - reproducible research
+  - confirmatory factor analysis
