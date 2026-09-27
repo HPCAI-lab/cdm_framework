@@ -1,0 +1,83 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my OpenMP matmul?
+
+its not working right, make it better
+
+```c
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Please keep the i-j-k loops and the 2D arrays.
+
+First the data-sharing bug, then the speedup.
+
+Our instructor said we can use AI for debugging but not for writing whole solutions. Does that cover you rewriting my pragma?
+
+Assistant: Wrap the update in #pragma omp critical so only one thread changes sum at a time.
+
+(If this is for a course, check your course's AI-use policy and disclose any code you use from here.)
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Can you try again?
+
+Assistant: Agreed, the critical section serializes the work and doesn't fix j and k. private(j, k, sum) is the right fix.
+
+sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Student: Can you explain why declaring sum inside the loop makes it private, and where the spec says that?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+Student: ok, I'll check that against the documentation.
+
+Assistant: Good idea.
+
+Student: I checked it against the OMP_NUM_THREADS=1 run: C matches element by element across 10 runs with 8 threads.
+
+I reran the failing case and a couple of others (1).
+
+I'm not worried about the naming or the comments, but I want to check the part about measuring speedup and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+Isn't that Intel-specific?
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: So j, k and sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums.
+
+I'll say I used AI in the lab notes.
+
+Assistant: Sounds good. Good luck with the rest of it.

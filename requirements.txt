@@ -5,3 +5,7 @@ scipy>=1.9
 matplotlib>=3.6
 statsmodels>=0.14     # MANOVA and multiple-comparison correction
 semopy>=2.3           # confirmatory factor analysis
+
+# Optional. spaCy improves tokenisation for feature extraction; cdm/features.py
+# falls back to a regex backend and reports which is active via backend().
+# spacy>=3.7

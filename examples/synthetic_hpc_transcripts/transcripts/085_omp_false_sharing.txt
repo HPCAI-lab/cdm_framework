@@ -1,0 +1,104 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why the dot product is correct but 8 threads are barely faster than 1, so I can explain the scaling in my report?
+
+I'm compiling with gcc 12 -O2 -fopenmp, 16-core node, n = 200 million.
+
+```c
+double partial[MAX_THREADS];
+#pragma omp parallel
+{
+    int tid = omp_get_thread_num();
+    partial[tid] = 0.0;
+    #pragma omp for
+    for (long i = 0; i < n; i++) partial[tid] += x[i] * y[i];
+}
+for (int t = 0; t < nthreads; t++) dot += partial[t];
+```
+
+Requirements: the result must stay correct and I need at least 5x speedup on 8 threads; keep the OpenMP pragmas and plain C.
+
+My plan:
+1. confirming the result is correct
+2. finding why it doesn't scale
+3. fixing the memory layout
+4. re-measuring speedup
+
+I need to confirm the cause before changing the code, because otherwise any speedup could be luck.
+
+For now just the diagnosis; we'll come back to the re-measurement later.
+
+You can't run this on our cluster, so here are my measurements: n=200M: 1 thread 0.42 s, 8 threads 0.31 s.
+
+The lab says 'no AI-generated code in submissions.' Does using a reduction clause you suggested count? If not, just explain the problem and I'll write the fix myself.
+
+(I'm leaving out my username and node name)
+
+Assistant: The slowdown is load imbalance; switch to schedule(dynamic).
+
+Student: That won't work: every iteration does the same work, so there's no imbalance, and dynamic scheduling adds overhead. perf c2c shows heavy HITM traffic on the partial array, which points at false sharing.
+
+Not quite. Redo it: keep the OpenMP pragmas and plain C, and fix the actual cause instead of working around it.
+
+Assistant: You're right, the iterations are uniform, so it isn't load imbalance; the HITM traffic confirms false sharing.
+
+The partial[] entries for different threads sit next to each other in the same cache line, so every update by one thread invalidates the line in the other cores' caches (false sharing). Accumulate into a private local variable and write it once, or use reduction(+:dot); padding each entry to 64 bytes also works.
+
+```c
+#pragma omp parallel for reduction(+:dot)
+for (long i = 0; i < n; i++) dot += x[i] * y[i];
+```
+
+Student: Can you explain how you know the cache line is 64 bytes on our machine?
+
+Why does it slow down when the threads never touch the same element?
+
+Assistant: It's 64 bytes on most x86 CPUs; you can confirm it with getconf LEVEL1_DCACHE_LINESIZE or lscpu on your node.
+
+You could also use the OMP_CACHE_ALIGN environment variable, which pads arrays automatically.
+
+Coherence works on cache lines, not elements, so neighbouring elements still conflict.
+
+Student: OMP_CACHE_ALIGN isn't in the OpenMP 5.2 spec's list of environment variables, so I don't think it exists.
+
+How does the reduction clause avoid it?
+
+Assistant: Correct, OMP_CACHE_ALIGN isn't a real OpenMP variable. Use a reduction or pad the array yourself.
+
+Each thread accumulates into a private copy, usually a register, and the copies are combined once at the end.
+
+Student: I checked it against the serial dot product: the result matches to 1e-9 relative, and 8 threads now take 0.07 s.
+
+After the fix I reran 1, 2, 4, 8 and 16 threads, n=1000 and n=200M to make sure it's still correct everywhere and that the fix didn't introduce a new problem or slow it down.
+
+I'm not worried about the naming or the comments, but I want to check the part about re-measuring speedup and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: Memory bandwidth is the main limit here.
+
+Always use schedule(dynamic) for OpenMP loops; it's the modern default.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+Perf c2c puts most HITM events on the partial array, which is false sharing, not bandwidth; after the reduction it scales to 6x, so bandwidth wasn't the limit yet.
+
+That's generic advice from a different kind of loop; for uniform iterations static is standard, so I'll only change the schedule if timing shows a difference.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The partial sums of different threads share a cache line, so each write by one thread invalidates the copies in other cores' caches and the line bounces between cores.
+
+Student: So in my own words: the threads never touch each other's numbers, but the hardware moves memory in 64-byte chunks, so neighbours keep stealing the same chunk from each other. Keeping each sum in a register until the end stops the fight.
+
+I'll run the 16-thread tests on an exclusive node through the scheduler so I don't slow down other students' jobs sharing it.
+
+I'll write the reduction myself from the explanation and note in the report that the false-sharing diagnosis came from this chat.
+
+My teammate's version pads partial[] to 64 bytes; I'll compare it against the reduction and we'll pick one before merging.
+
+Assistant: Sounds good. Good luck with the rest of it.

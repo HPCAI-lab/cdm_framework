@@ -1,0 +1,103 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why the result changes from run to run with 8 threads but is correct with OMP_NUM_THREADS=1 in my OpenMP matmul?
+
+I also want it optimized better.
+
+```c
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Please keep the i-j-k loops and the 2D arrays, and it has to be correct.
+
+I'd split it into: (1) finding which variables are shared, (2) fixing the data-sharing clauses, (3) checking the result against one thread, (4) measuring speedup.
+
+First the data-sharing bug, then the speedup.
+
+Just look at the data-sharing bug in this function.
+
+here's how I run it on the node:
+ssh fkhan@node07.hpc.example.edu
+export OMP_NUM_THREADS=8 && ./mm 2048
+
+Assistant: Wrap the update in #pragma omp critical so only one thread changes sum at a time.
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Can you try again?
+
+Can you tell me how fast it will run on 16 threads?
+
+Assistant: Agreed, the critical section serializes the work and doesn't fix j and k. private(j, k, sum) is the right fix.
+
+sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: ok, here are my timings then: N=2048: 1 thread 38.0 s, 4 threads 10.4 s, 8 threads 6.3 s.
+
+Assistant: Thanks, that's useful. Those numbers show the scaling flattening out; we can look at why once the result is correct.
+
+Student: Can you explain why declaring sum inside the loop makes it private, and where the spec says that?
+
+Why does it work with one thread?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+With one thread there's nobody to share sum with, so no update is lost.
+
+Student: ok, I'll check that against the documentation.
+
+Why do j and k need to be private too, not just sum?
+
+Assistant: They're loop indices written by every thread; if shared, one thread can advance another's loop.
+
+Student: So why is the speedup only about 6x on 8 threads after the fix?
+
+Assistant: The B[k][j] access strides down columns, so cache misses and memory bandwidth limit scaling.
+
+Student: I checked it against the OMP_NUM_THREADS=1 run: C matches element by element across 10 runs with 8 threads.
+
+After the fix I reran 1, 2, 8 and 16 threads, N=17 and N=2048 to make sure it's still correct everywhere and that the fix didn't introduce a new problem or slow it down.
+
+I'm not worried about the naming or the comments, but I want to check the part about measuring speedup and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, perf stat shows IPC dropping from 2.1 to 0.6 at 8 threads with the critical section.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Summarize the problem for me briefly.
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: So in my own words: each thread thinks it owns sum, but there's only one copy, so two threads adding into it at once lose updates. Giving every thread its own copy removes the collision.
+
+My partner's timing harness calls this with a flat array, so I'll check the 2D indexing matches his layout before we combine.
+
+Assistant: Sounds good. Good luck with the rest of it.

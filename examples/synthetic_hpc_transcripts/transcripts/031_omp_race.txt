@@ -1,0 +1,89 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my OpenMP matmul?
+
+I also want it optimized better.
+
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+
+What happens: the result changes from run to run with 8 threads but is correct with OMP_NUM_THREADS=1.
+
+Please keep the i-j-k loops and the 2D arrays, and it has to be correct.
+
+I think there are two parts: finding which variables are shared and fixing the data-sharing clauses.
+
+Just look at the data-sharing bug in this function.
+
+I'll do the speedup measurements and the write-up myself; you check whether my private clause covers everything.
+
+Assistant: Wrap the update in #pragma omp critical so only one thread changes sum at a time.
+
+Student: hmm ok
+
+Can you try again and keep the i-j-k loops and the 2D arrays?
+
+Assistant: Agreed, the critical section serializes the work and doesn't fix j and k. private(j, k, sum) is the right fix.
+
+sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Student: source?
+
+Why does it work with one thread?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+With one thread there's nobody to share sum with, so no update is lost.
+
+Student: Why do j and k need to be private too, not just sum?
+
+Assistant: They're loop indices written by every thread; if shared, one thread can advance another's loop.
+
+Student: So why is the speedup only about 6x on 8 threads after the fix?
+
+Assistant: The B[k][j] access strides down columns, so cache misses and memory bandwidth limit scaling.
+
+Student: I compared it against the OMP_NUM_THREADS=1 run and it matches.
+
+I'm a little unsure about all of it, to be honest.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: ok
+
+For reference, perf stat shows IPC dropping from 2.1 to 0.6 at 8 threads with the critical section.
+
+Isn't that Intel-specific?
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: can you explain what was wrong in a couple sentences
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: So j, k and sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums.
+
+Assistant: Sounds good. Good luck with the rest of it.

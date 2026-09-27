@@ -1,0 +1,98 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why the result is wrong for N=1000 on 6 ranks but correct for N=1200, so I can explain the fix in my lab report?
+
+I think it's a MPI correctness problem, not a performance one.
+
+```c
+int rows = N / size;
+MPI_Scatter(A, rows*N, MPI_DOUBLE, localA, rows*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+MPI_Bcast(B, N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+for (int i = 0; i < rows; i++)
+    for (int j = 0; j < N; j++) {
+        double s = 0.0;
+        for (int k = 0; k < N; k++) s += localA[i*N+k] * B[k*N+j];
+        localC[i*N+j] = s;
+    }
+MPI_Gather(localC, rows*N, MPI_DOUBLE, C, rows*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+```
+
+Please keep it in C and keep the row-block layout, and it has to be correct.
+
+First the row distribution, then the gather.
+
+Just look at the row distribution in this function.
+
+Is submitting generated MPI code allowed under our course's AI policy, or do I have to write the Scatterv part myself?
+
+(I've replaced the account name and hostname with [redacted] since that's cluster login info) because that's login and account information.
+
+Assistant: This kind of problem usually comes from how data is shared or split between processes. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+Student: hmm ok
+
+Can you try again and keep it in C and keep the row-block layout?
+
+Can you tell me how fast it will run on 16 ranks?
+
+Assistant: N / size is integer division, so when N isn't divisible by the rank count the last N % size rows of A are never sent to any rank and those rows of C are never computed. Use MPI_Scatterv and MPI_Gatherv with per-rank counts and displacements: give the first N % size ranks one extra row.
+
+```c
+int base = N / size, extra = N % size;
+for (int r = 0; r < size; r++) {
+    int myrows = base + (r < extra);
+    counts[r] = myrows * N;
+    displs[r] = (r * base + (r < extra ? r : extra)) * N;
+}
+MPI_Scatterv(A, counts, displs, MPI_DOUBLE, localA, counts[rank], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: ok, here are my timings then: N=2048: 1 rank 41.2 s, 8 ranks 6.1 s, 16 ranks 4.9 s.
+
+Assistant: Thanks, that's useful. Those numbers show the scaling flattening out; we can look at why once the result is correct.
+
+Student: source?
+
+Why does Scatterv need displacements and not just counts?
+
+Assistant: The displacements tell the root where each rank's block starts in A; counts alone don't fix the offsets once blocks differ in size. The MPI standard's section on MPI_Scatterv describes both arrays.
+
+Because once blocks differ in size, the root can't compute each rank's start offset from the rank number alone.
+
+Student: I compared it against the serial triple loop on rank 0 and it matches.
+
+I reran the failing case and a couple of others (N=7 on 3 ranks).
+
+I'm a little unsure about all of it, to be honest.
+
+Assistant: That sounds right.
+
+One more thing: The remaining time at 16 ranks is mostly computation, so adding ranks should keep helping.
+
+MPI_Bcast is always the bottleneck in this kind of code.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, mpiP shows 38% of the time in MPI_Bcast of B at 16 ranks.
+
+That claim is from one configuration; on our 2-node Ethernet setup it may not hold, so I'll measure it on our cluster before I believe it.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: can you explain what was wrong in a couple sentences
+
+Assistant: Integer division drops the remainder, so the last N % size rows of A are never sent to any rank and the matching rows of C are never computed; MPI_Scatterv lets each rank receive a different count.
+
+Student: So integer division drops the remainder, so the last rows of A are never sent and those rows of C are never computed.
+
+I'll be careful with the shared cluster.
+
+In the report I'll mark the Scatterv/Gatherv count setup as AI-suggested and say the decomposition and the scaling analysis are mine.
+
+This is my part of our group's code.
+
+Assistant: Sounds good. Good luck with the rest of it.

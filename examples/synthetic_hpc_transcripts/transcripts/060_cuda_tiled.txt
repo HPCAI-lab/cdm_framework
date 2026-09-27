@@ -1,0 +1,108 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why it is wrong for N=1000 and occasionally wrong even for N=1024 with TILE=16 in my CUDA tiled matmul?
+
+I'm compiling with nvcc 12.2 -O3 -arch=sm_80, one A100.
+
+__global__ void matmul(const float *A, const float *B, float *C, int N) {
+    __shared__ float As[TILE][TILE], Bs[TILE][TILE];
+    int row = blockIdx.y * TILE + threadIdx.y;
+    int col = blockIdx.x * TILE + threadIdx.x;
+    float acc = 0.0f;
+    for (int t = 0; t < N / TILE; t++) {
+        As[threadIdx.y][threadIdx.x] = A[row * N + t * TILE + threadIdx.x];
+        Bs[threadIdx.y][threadIdx.x] = B[(t * TILE + threadIdx.y) * N + col];
+        for (int k = 0; k < TILE; k++) acc += As[threadIdx.y][k] * Bs[k][threadIdx.x];
+    }
+    C[row * N + col] = acc;
+}
+
+Build/run setup: nvcc 12.2 -O3 -arch=sm_80, one A100.
+
+Requirements: it must match cuBLAS sgemm to 1e-3 relative error for any N up to 4096, including N not a multiple of TILE; keep TILE=16 and shared-memory tiling.
+
+My plan:
+1. checking the index math
+2. checking shared-memory synchronization
+3. handling N that isn't a multiple of TILE
+4. comparing against cuBLAS
+
+First the synchronization, then the partial tiles.
+
+For now just the synchronization; we'll come back to the partial tiles later.
+
+You can't run this on our cluster, so here are my measurements: N=4096: my kernel 41 ms, cuBLAS sgemm 9 ms.
+
+I'll handle the benchmarking against cuBLAS myself; you check the boundary conditions.
+
+Assistant: One __syncthreads() after loading the tiles is enough.
+
+(If this is for a course, check your course's AI-use policy and disclose any code you use from here.)
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Not quite. Redo it: keep TILE=16 and shared-memory tiling, and fix the actual cause instead of working around it.
+
+Assistant: Yes, you need both barriers; the second one protects the tile from being overwritten while it's still being read.
+
+Two problems. There is no __syncthreads() between loading the tiles and using them, or before the next iteration overwrites them, so threads read half-loaded tiles. And N / TILE drops the last partial tile, with no bounds guard on the loads or the store, so N=1000 is wrong. Loop to (N + TILE - 1) / TILE, zero-pad out-of-range loads, add a barrier after loading and after the inner product, and guard the store.
+
+```c
+for (int t = 0; t < (N + TILE - 1) / TILE; t++) {
+    int ac = t * TILE + threadIdx.x, br = t * TILE + threadIdx.y;
+    As[threadIdx.y][threadIdx.x] = (row < N && ac < N) ? A[row * N + ac] : 0.0f;
+    Bs[threadIdx.y][threadIdx.x] = (br < N && col < N) ? B[br * N + col] : 0.0f;
+    __syncthreads();
+    for (int k = 0; k < TILE; k++) acc += As[threadIdx.y][k] * Bs[k][threadIdx.x];
+    __syncthreads();
+}
+if (row < N && col < N) C[row * N + col] = acc;
+```
+
+Student: Can you explain why a warp-level sync isn't enough here, and where the CUDA guide says so?
+
+Why do we need the second __syncthreads?
+
+Assistant: A tile is shared by all warps in the block, so you need a block-wide barrier; the CUDA C++ Programming Guide's section on __syncthreads describes this.
+
+It stops the next iteration's loads from overwriting a tile other threads are still reading.
+
+Student: ok, I'll check that against the documentation.
+
+How does zero-padding make the partial tile correct?
+
+Assistant: Out-of-range elements contribute 0 to every dot product, so the result for in-range elements is unchanged.
+
+Student: I compared it against cuBLAS sgemm on the same inputs and it matches.
+
+I reran the case that was failing and read the output.
+
+I'm not worried about the naming or the comments, but I want to check the part about comparing against cuBLAS and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: The kernel is compute-bound now, so unrolling the inner loop will help most.
+
+Just rewrite it with CUDA-specific intrinsics; nothing else matters for GPUs.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+Nsight Compute shows it near peak DRAM bandwidth with low SM utilization, which means memory-bound, not compute-bound; I'll try a bigger tile instead of unrolling.
+
+That seems NVIDIA-specific.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: Without __syncthreads(), some threads start the inner product before other threads in the block have finished writing their elements of the shared tile, so they read stale or partially loaded data.
+
+Student: So in my own words: the barrier stops a fast warp from reading a half-loaded tile, and the second barrier stops it from overwriting a tile someone else is still using.
+
+Good point about the course policy, I'll check it.
+
+I'll cite the AI use.
+
+Assistant: Sounds good. Good luck with the rest of it.

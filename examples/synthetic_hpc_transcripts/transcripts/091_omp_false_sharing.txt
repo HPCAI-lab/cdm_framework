@@ -1,0 +1,72 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my OpenMP partial sums?
+
+its not working right, make it better
+
+I think there are two parts: confirming the result is correct and finding why it doesn't scale.
+
+Just look at the diagnosis in this function.
+
+Assistant: Could you paste the relevant code and describe exactly what goes wrong?
+
+Student: ```c
+double partial[MAX_THREADS];
+#pragma omp parallel
+{
+    int tid = omp_get_thread_num();
+    partial[tid] = 0.0;
+    #pragma omp for
+    for (long i = 0; i < n; i++) partial[tid] += x[i] * y[i];
+}
+for (int t = 0; t < nthreads; t++) dot += partial[t];
+```
+
+Assistant: This kind of problem usually comes from how data is shared or split between threads. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Can you try again?
+
+Assistant: The partial[] entries for different threads sit next to each other in the same cache line, so every update by one thread invalidates the line in the other cores' caches (false sharing). Accumulate into a private local variable and write it once, or use reduction(+:dot); padding each entry to 64 bytes also works.
+
+```c
+#pragma omp parallel for reduction(+:dot)
+for (long i = 0; i < n; i++) dot += x[i] * y[i];
+```
+
+Student: Can you explain how you know the cache line is 64 bytes on our machine?
+
+Why does it slow down when the threads never touch the same element?
+
+Assistant: It's 64 bytes on most x86 CPUs; you can confirm it with getconf LEVEL1_DCACHE_LINESIZE or lscpu on your node.
+
+Coherence works on cache lines, not elements, so neighbouring elements still conflict.
+
+Student: Does this look right to you?
+
+I reran the case that was failing and read the output.
+
+perfect, I'll use it as is
+
+Assistant: That sounds right.
+
+One more thing: Memory bandwidth is the main limit here.
+
+Always use schedule(dynamic) for OpenMP loops; it's the modern default.
+
+Student: oh ok, I'll go with that then
+
+For reference, perf c2c reports most HITM events on the partial array.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The partial sums of different threads share a cache line, so each write by one thread invalidates the copies in other cores' caches and the line bounces between cores.
+
+Student: so for my report: The partial sums of different threads share a cache line, so each write by one thread invalidates the copies in other cores' caches and the line bounces between cores.
+
+I'll try not to overload the node.
+
+Assistant: Sounds good. Good luck with the rest of it.

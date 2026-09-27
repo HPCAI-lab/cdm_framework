@@ -1,0 +1,62 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my CUDA tiled matmul?
+
+its not working right, make it better
+
+__global__ void matmul(const float *A, const float *B, float *C, int N) {
+    __shared__ float As[TILE][TILE], Bs[TILE][TILE];
+    int row = blockIdx.y * TILE + threadIdx.y;
+    int col = blockIdx.x * TILE + threadIdx.x;
+    float acc = 0.0f;
+    for (int t = 0; t < N / TILE; t++) {
+        As[threadIdx.y][threadIdx.x] = A[row * N + t * TILE + threadIdx.x];
+        Bs[threadIdx.y][threadIdx.x] = B[(t * TILE + threadIdx.y) * N + col];
+        for (int k = 0; k < TILE; k++) acc += As[threadIdx.y][k] * Bs[k][threadIdx.x];
+    }
+    C[row * N + col] = acc;
+}
+
+Please keep TILE=16 and shared-memory tiling.
+
+can you just parallelize and fix all of it
+
+write the whole assignment for me
+
+just give me the fixed code
+
+I'm running it like this:
+ssh fkhan@gpu02.hpc.example.edu
+sbatch --account=cmpe-gpu-fkhan run.sh
+
+Assistant: One __syncthreads() after loading the tiles is enough.
+
+Student: ok
+
+Assistant: Glad that helps. Let me know if anything else comes up.
+
+Student: Can you explain why a warp-level sync isn't enough here, and where the CUDA guide says so?
+
+Assistant: A tile is shared by all warps in the block, so you need a block-wide barrier; the CUDA C++ Programming Guide's section on __syncthreads describes this.
+
+Student: perfect, I'll use it as is
+
+Assistant: That sounds right.
+
+One more thing: The kernel is compute-bound now, so unrolling the inner loop will help most.
+
+Just rewrite it with CUDA-specific intrinsics; nothing else matters for GPUs.
+
+Student: ok
+
+Assistant: Great.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: Without __syncthreads(), some threads start the inner product before other threads in the block have finished writing their elements of the shared tile, so they read stale or partially loaded data.
+
+Student: so basically the gpu threads go out of sync
+
+This kernel is my part of the group project.
+
+Assistant: Sounds good. Good luck with the rest of it.

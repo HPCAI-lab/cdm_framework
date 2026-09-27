@@ -1,0 +1,76 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my MPI halo exchange?
+
+I also want it optimized better.
+
+/* 1D Jacobi, each rank owns rows [1..local_n], ghosts at 0 and local_n+1 */
+MPI_Send(&u[local_n][0], NX, MPI_DOUBLE, right, 0, MPI_COMM_WORLD);
+MPI_Recv(&u[0][0], NX, MPI_DOUBLE, left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+MPI_Send(&u[1][0], NX, MPI_DOUBLE, left, 1, MPI_COMM_WORLD);
+MPI_Recv(&u[local_n+1][0], NX, MPI_DOUBLE, right, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+Please keep the 1D row decomposition.
+
+I think there are two parts: finding where it hangs and understanding why small NX works.
+
+First the deadlock, then overlapping communication with compute.
+
+run command:
+mpirun -np 8 ./jacobi 8192
+on login node fkhan@hpc-login.example.edu, account cmpe4337-fkhan
+
+Assistant: This kind of problem usually comes from how data is shared or split between processes. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+(If this is for a course, check your course's AI-use policy and disclose any code you use from here.)
+
+Student: hmm ok
+
+Can you try again and keep the 1D row decomposition?
+
+also can you run it on 16 ranks and tell me the speedup
+
+Assistant: Every rank calls a blocking MPI_Send before its MPI_Recv. For small messages the library buffers them (the eager protocol), so it works; for large messages MPI_Send waits for the matching receive, and since every rank is sending, nobody receives: a deadlock. Use MPI_Sendrecv, or MPI_Isend/MPI_Irecv followed by MPI_Waitall.
+
+```c
+MPI_Sendrecv(&u[local_n][0], NX, MPI_DOUBLE, right, 0,
+             &u[0][0],       NX, MPI_DOUBLE, left,  0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+MPI_Sendrecv(&u[1][0],       NX, MPI_DOUBLE, left,  1,
+             &u[local_n+1][0], NX, MPI_DOUBLE, right, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: Can you explain where the standard says MPI_Send is allowed to block?
+
+Why does it work for NX=512 but not 8192?
+
+Assistant: The MPI standard's section on communication modes says a standard-mode send may either buffer or wait for the matching receive; the choice is up to the implementation.
+
+Small messages fit under the eager threshold and are buffered; large ones switch to rendezvous and wait for the receive.
+
+Student: perfect, I'll use it as is
+
+Assistant: That sounds right.
+
+One more thing: The hang is probably caused by mismatched tags.
+
+Nonblocking communication is always faster than Sendrecv.
+
+Student: ok
+
+For reference, gdb attached to the hung job shows every rank sitting inside MPI_Send.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: can you explain what was wrong in a couple sentences
+
+Assistant: Each rank does a blocking send before its receive; small messages are buffered by the eager protocol, but large ones wait for the matching receive, and because every rank is sending first nobody ever receives.
+
+Student: So each rank does a blocking send before its receive, and for large messages the send waits for a receive that never starts because every rank is also sending.
+
+Good point about the course policy, I'll check it.
+
+This is for a group project but I'm just doing my own piece.
+
+Assistant: Sounds good. Good luck with the rest of it.

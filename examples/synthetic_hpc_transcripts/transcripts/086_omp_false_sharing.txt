@@ -1,0 +1,94 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why the dot product is correct but 8 threads are barely faster than 1, so I can explain the scaling in my report?
+
+I'm compiling with gcc 12 -O2 -fopenmp, 16-core node, n = 200 million.
+
+```c
+double partial[MAX_THREADS];
+#pragma omp parallel
+{
+    int tid = omp_get_thread_num();
+    partial[tid] = 0.0;
+    #pragma omp for
+    for (long i = 0; i < n; i++) partial[tid] += x[i] * y[i];
+}
+for (int t = 0; t < nthreads; t++) dot += partial[t];
+```
+
+Requirements: the result must stay correct and I need at least 5x speedup on 8 threads; keep the OpenMP pragmas and plain C.
+
+First the diagnosis, then the re-measurement.
+
+Just look at the diagnosis in this function.
+
+Assistant: This kind of problem usually comes from how data is shared or split between threads. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+Student: That doesn't explain it. Padding to 8 bytes doesn't help because a cache line here is 64 bytes, so the entries still share a line.
+
+Can you try again?
+
+Can you tell me how fast it will run on 16 threads?
+
+Assistant: The partial[] entries for different threads sit next to each other in the same cache line, so every update by one thread invalidates the line in the other cores' caches (false sharing). Accumulate into a private local variable and write it once, or use reduction(+:dot); padding each entry to 64 bytes also works.
+
+```c
+#pragma omp parallel for reduction(+:dot)
+for (long i = 0; i < n; i++) dot += x[i] * y[i];
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: ok, here are my timings then: n=200M: 1 thread 0.42 s, 8 threads 0.31 s.
+
+Assistant: Thanks, that's useful. Those numbers show the scaling flattening out; we can look at why once the result is correct.
+
+Student: Can you explain how you know the cache line is 64 bytes on our machine?
+
+Why does it slow down when the threads never touch the same element?
+
+Also, why did you choose those variable names, and are you sure the comments are worded correctly? Please justify every line, including the formatting.
+
+Assistant: It's 64 bytes on most x86 CPUs; you can confirm it with getconf LEVEL1_DCACHE_LINESIZE or lscpu on your node.
+
+You could also use the OMP_CACHE_ALIGN environment variable, which pads arrays automatically.
+
+Coherence works on cache lines, not elements, so neighbouring elements still conflict.
+
+The names and comments are conventional and don't affect correctness.
+
+Student: OMP_CACHE_ALIGN isn't in the OpenMP 5.2 spec's list of environment variables, so I don't think it exists.
+
+How does the reduction clause avoid it?
+
+Assistant: Correct, OMP_CACHE_ALIGN isn't a real OpenMP variable. Use a reduction or pad the array yourself.
+
+Each thread accumulates into a private copy, usually a register, and the copies are combined once at the end.
+
+Student: I checked it against the serial dot product: the result matches to 1e-9 relative, and 8 threads now take 0.07 s.
+
+After the fix I reran 1, 2, 4, 8 and 16 threads, n=1000 and n=200M to make sure it's still correct everywhere and that the fix didn't introduce a new problem or slow it down.
+
+Assistant: That sounds right.
+
+One more thing: Memory bandwidth is the main limit here.
+
+Always use schedule(dynamic) for OpenMP loops; it's the modern default.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, perf c2c reports most HITM events on the partial array.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The partial sums of different threads share a cache line, so each write by one thread invalidates the copies in other cores' caches and the line bounces between cores.
+
+Student: So in my own words: the threads never touch each other's numbers, but the hardware moves memory in 64-byte chunks, so neighbours keep stealing the same chunk from each other. Keeping each sum in a register until the end stops the fight.
+
+I'll try not to overload the node.
+
+I'll disclose the AI use.
+
+Assistant: Sounds good. Good luck with the rest of it.

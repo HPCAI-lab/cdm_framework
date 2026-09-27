@@ -1,0 +1,83 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why the result changes from run to run with 8 threads but is correct with OMP_NUM_THREADS=1, so I understand what went wrong before the quiz?
+
+I also want it optimized better.
+
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+
+Please keep the i-j-k loops and the 2D arrays, and it has to be correct.
+
+I think there are two parts: finding which variables are shared and fixing the data-sharing clauses.
+
+First the data-sharing bug, then the speedup.
+
+Just look at the data-sharing bug in this function.
+
+Our instructor said we can use AI for debugging but not for writing whole solutions. Does that cover you rewriting my pragma?
+
+Assistant: This kind of problem usually comes from how data is shared or split between threads. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Can you try again and keep the i-j-k loops and the 2D arrays?
+
+Assistant: sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Student: Can you explain why declaring sum inside the loop makes it private, and where the spec says that?
+
+Why does it work with one thread?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+With one thread there's nobody to share sum with, so no update is lost.
+
+Student: Why do j and k need to be private too, not just sum?
+
+Assistant: They're loop indices written by every thread; if shared, one thread can advance another's loop.
+
+Student: I ran it once with 8 threads and it matched.
+
+I reran the case that was failing and read the output.
+
+I'm a little unsure about all of it, to be honest.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, perf stat shows IPC dropping from 2.1 to 0.6 at 8 threads with the critical section.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: So in my own words: each thread thinks it owns sum, but there's only one copy, so two threads adding into it at once lose updates. Giving every thread its own copy removes the collision.
+
+I'll say I used AI in the lab notes.
+
+Assistant: Sounds good. Good luck with the rest of it.

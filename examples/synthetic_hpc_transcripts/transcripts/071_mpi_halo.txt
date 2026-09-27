@@ -1,0 +1,90 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find why it runs for NX=512 but hangs at the first iteration for NX=8192 in my MPI halo exchange?
+
+I think it's a MPI correctness problem, not a performance one.
+
+```c
+/* 1D Jacobi, each rank owns rows [1..local_n], ghosts at 0 and local_n+1 */
+MPI_Send(&u[local_n][0], NX, MPI_DOUBLE, right, 0, MPI_COMM_WORLD);
+MPI_Recv(&u[0][0], NX, MPI_DOUBLE, left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+MPI_Send(&u[1][0], NX, MPI_DOUBLE, left, 1, MPI_COMM_WORLD);
+MPI_Recv(&u[local_n+1][0], NX, MPI_DOUBLE, right, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+```
+
+Requirements: it must not hang for any NX up to 16384, and the grid after 100 iterations must match the serial Jacobi code; keep the 1D row decomposition.
+
+I think there are two parts: finding where it hangs and understanding why small NX works.
+
+First the deadlock, then overlapping communication with compute.
+
+write the whole assignment for me
+
+run command:
+mpirun -np 8 ./jacobi 8192
+on login node fkhan@hpc-login.example.edu, account cmpe4337-fkhan
+
+Assistant: This kind of problem usually comes from how data is shared or split between processes. Check that each one has its own copies of anything it writes and that your loop bounds cover every element.
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+Can you try again and keep the 1D row decomposition?
+
+Can you tell me how fast it will run on 16 ranks?
+
+Assistant: Every rank calls a blocking MPI_Send before its MPI_Recv. For small messages the library buffers them (the eager protocol), so it works; for large messages MPI_Send waits for the matching receive, and since every rank is sending, nobody receives: a deadlock. Use MPI_Sendrecv, or MPI_Isend/MPI_Irecv followed by MPI_Waitall.
+
+```c
+MPI_Sendrecv(&u[local_n][0], NX, MPI_DOUBLE, right, 0,
+             &u[0][0],       NX, MPI_DOUBLE, left,  0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+MPI_Sendrecv(&u[1][0],       NX, MPI_DOUBLE, left,  1,
+             &u[local_n+1][0], NX, MPI_DOUBLE, right, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: ok, here are my timings then: NX=8192, 100 iterations: serial 12.4 s; 8 ranks with Sendrecv 1.9 s.
+
+Assistant: Thanks, that's useful. Those numbers show the scaling flattening out; we can look at why once the result is correct.
+
+Student: Can you explain where the standard says MPI_Send is allowed to block?
+
+Why does it work for NX=512 but not 8192?
+
+Assistant: The MPI standard's section on communication modes says a standard-mode send may either buffer or wait for the matching receive; the choice is up to the implementation.
+
+Small messages fit under the eager threshold and are buffered; large ones switch to rendezvous and wait for the receive.
+
+Student: ok, I'll check that against the documentation.
+
+How does Sendrecv avoid the deadlock?
+
+Assistant: It posts the send and receive together, so the library can progress both without an ordering dependency.
+
+Student: I compared it against the serial Jacobi code and it matches.
+
+I reran the case that was failing and read the output.
+
+I'm a little unsure about all of it, to be honest.
+
+Assistant: That sounds right.
+
+One more thing: The hang is probably caused by mismatched tags.
+
+Nonblocking communication is always faster than Sendrecv.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, gdb attached to the hung job shows every rank sitting inside MPI_Send.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Summarize the problem for me briefly.
+
+Assistant: Each rank does a blocking send before its receive; small messages are buffered by the eager protocol, but large ones wait for the matching receive, and because every rank is sending first nobody ever receives.
+
+Student: So in my own words: it's a circle of ranks each holding the door for the next one; small messages slip through a buffer, big ones don't, so everyone waits forever. Sendrecv lets each rank send and receive at the same time.
+
+This is the communication part of our team's solver.
+
+Assistant: Sounds good. Good luck with the rest of it.

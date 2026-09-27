@@ -1,74 +1,94 @@
 # Cognitive Diversity Metrics (CDM) — Analysis Pipeline
 
-A reproducible pipeline for **validating the Cognitive Diversity Metrics (CDM)
-instrument**: a five-dimension rubric for assessing how students engage
-cognitively with AI-assisted work. The repository provides the full
-measurement-validation workflow — a declared generative model, ordinal
-inter-rater agreement statistics, and a complete psychometric analysis — together
-with a **simulated demonstration dataset** so the machinery can be run and
-inspected before any real data are collected.
+Software for building and validating **CDM**, a five-dimension rubric that
+measures how students conduct AI-assisted work — here, writing, debugging and
+optimizing parallel and high-performance code (HPC/PDC coursework) with a
+conversational model in the loop. The repository carries three things:
+
+1. **A transcript path.** Converts exported student–AI transcripts into a turn
+   log, computes 25 features, scores the 25 rubric items, and calibrates those
+   scores against human coding.
+2. **A psychometric report.** Reliability, inter-coder agreement, factor
+   structure, criterion correlations and test-retest stability from a table of
+   item scores.
+3. **Design-time evidence.** A declared generative model plus negative controls,
+   power curves and a fit-by-sample-size sweep, run before any real data exist.
 
 > [!IMPORTANT]
-> **This repository contains simulated data only.** Every statistic produced here
-> emerges from a declared generative model plus sampling noise; the structural
-> assumptions are inputs, not results. Outputs are **a demonstration that the
-> pipeline is correct and ready**, not empirical findings. All artifacts are
-> stamped `SIMULATED`. See [`docs/methodology.md`](docs/methodology.md) for the
-> full integrity statement.
+> **This repository contains simulated data only.** Every statistic produced by
+> the demonstrations emerges from a declared generative model plus sampling
+> noise; the structural assumptions are inputs, not results. Simulated
+> artifacts are stamped `SIMULATED`, and automated scores carry their
+> calibration state (uncalibrated, norm-referenced, or calibrated). See
+> [`docs/methodology.md`](docs/methodology.md) for the integrity statement.
 
 ---
 
 ## The CDM instrument
 
-CDM scores five dimensions of AI-assisted cognitive work:
+Five dimensions, five items each, every item scored 1–5 on a session (one
+student's continuous work on one task). The coder manual, with general and
+HPC/PDC anchors for every item, is [`docs/rubric.md`](docs/rubric.md).
 
-| Dimension | What it captures |
-|---|---|
-| Problem Decomposition | Breaking a task into tractable sub-problems |
-| Prompt Engineering | Eliciting useful output from an AI system |
-| Output Validation | Checking and correcting AI output |
-| Ethical Integration | Applying ethical judgment to AI use |
-| Collaborative Sensemaking | Building shared understanding with AI in the loop |
+| Dimension | Decision it concerns | HPC/PDC instance |
+|---|---|---|
+| Problem Decomposition | What to hand the model, in what units and order | Decomposing a routine into parallelizable units |
+| Prompt Engineering | How to specify usable work | Specifying an MPI/OpenMP/CUDA task precisely |
+| Output Validation | Whether and how to check output | Testing generated code for correctness and performance |
+| Ethical Integration | What may be sent and disclosed | Attribution and AI-use disclosure; handling credentials and shared resources |
+| Collaborative Sensemaking | Reconciling output with other sources | Reconciling output with profiler traces and documentation |
 
-Each dimension is measured by a five-item rubric scored 1–5, coded by three expert
-raters. The validation study design is a convergent mixed-methods pilot across
-three disciplines (business, health sciences, humanities).
+Two items, OV4 (calibrated skepticism) and CS2 (explanation quality), are
+ideal-point items: the top score is a middle band, not the maximum. They are
+excluded from the dominance factor model and scored with an interior-optimum
+mapping.
 
-## What the pipeline does
+## Status
 
-Given a dataset (simulated here, real once collected), the pipeline computes a
-complete psychometric validation:
+- **Feasibility deployment.** One section of 15 students in Computer
+  Engineering at The University of Texas at Tyler, debugging a matrix
+  multiplication implementation with a conversational model. Transcripts were
+  collected; human coding is not yet complete, so no measurement statistic is
+  reported from it.
+- **Design-time evaluation.** Complete on simulated data (see below).
+- **Revised pilot protocol.** Crossed common/domain task design, several
+  sections per cohort, silent-log vs think-aloud conditions; pending review
+  board approval.
 
-- **Group differences** — MANOVA of discipline against the five dimensions, with
-  partial eta-squared effect sizes.
-- **Internal consistency** — Cronbach's alpha per dimension.
-- **Inter-rater reliability** — quadratic-weighted Cohen's kappa and
-  Krippendorff's alpha, the ordinal-appropriate statistics for rubric scores.
-- **Construct validity** — confirmatory factor analysis fit across sample sizes.
-- **Criterion validity** — correlations against external measures.
-- **Test-retest reliability** — intraclass correlation across a re-administration.
+Transcripts collected during regular instruction are not automatically
+available for research use. Settle review-board status before analysing them
+(see [`docs/pilot_workflow.md`](docs/pilot_workflow.md)).
 
 ## Repository structure
 
 ```
-cdm-framework/
-├── cdm/                        # the package
-│   ├── model_core.py           # generative model — the ONLY file to edit for real data
-│   ├── agreement.py            # ordinal inter-rater statistics
-│   └── pipeline.py             # full analysis pipeline + output writer
+cdm_framework/
+├── cdm/
+│   ├── ingest.py          # ChatGPT / Claude / text / CSV / directory exports -> turn log
+│   ├── logs.py            # turn-log loading, validation, PII screen
+│   ├── lexicons.py        # marker lexicons as profiles: general, hpc
+│   ├── features.py        # 25 session features, one per rubric item
+│   ├── autoscore.py       # features -> item scores; calibration; agreement
+│   ├── thresholds.py      # feature distributions, flat-feature diagnosis, threshold provenance
+│   ├── agreement.py       # weighted kappa, Krippendorff's alpha, ICC
+│   ├── ordinal.py         # polychoric correlations, ordinal alpha/omega, lavaan WLSMV script
+│   ├── model_core.py      # declared generative model (simulated item scores)
+│   ├── simulate_logs.py   # simulated transcripts driven by the same model
+│   ├── pipeline.py        # psychometric report + figures
+│   └── controls.py        # negative controls, power curve, fit-by-N sweep
 ├── docs/
-│   ├── methodology.md          # how it works + the integrity statement (read first)
-│   ├── results_demonstration.md# narrative of the simulated demonstration results
-│   └── data_dictionary.md      # every column of the dataset, documented
-├── examples/
-│   └── expected_output/        # a reference run (report, dataset, figures)
-├── tests/
-│   └── test_pipeline.py        # sanity tests
-├── run_demo.py                 # convenience entry point
-├── requirements.txt
-├── Makefile
-├── CITATION.cff
-└── LICENSE
+│   ├── rubric.md                  # coder manual (25 items, general + HPC/PDC anchors)
+│   ├── pilot_workflow.md          # processing collected transcripts, step by step
+│   ├── methodology.md             # generative model and integrity statement
+│   ├── data_dictionary.md         # columns of the item-score dataset
+│   └── results_demonstration.md   # narrative of the simulated demonstration
+├── examples/expected_output/      # reference run of the psychometric demo
+├── tests/                         # test_pipeline, test_log_path, test_pilot_path
+├── run_pilot.py      # collected transcripts -> scores, thresholds, agreement
+├── run_controls.py   # design-time evidence, with LaTeX fragments for the paper
+├── run_log_demo.py   # transcript path on simulated logs
+├── run_demo.py       # psychometric report on simulated item scores
+├── Makefile, requirements.txt, requirements-dev.txt, CITATION.cff, LICENSE
 ```
 
 ## Installation
@@ -77,75 +97,84 @@ Requires Python 3.9 or newer.
 
 ```bash
 git clone <repository-url>
-cd cdm-framework
-python -m pip install -r requirements.txt
+cd cdm_framework
+python -m pip install -r requirements-dev.txt
+python -m pytest -q          # or: make test
 ```
 
-## Quickstart
+## Processing collected transcripts
 
-Run the demonstration (writes stamped outputs to `results/`):
+The main path for real data. No code changes are needed.
 
 ```bash
-python -m cdm.pipeline --outdir results
-# or, equivalently:
-python run_demo.py --outdir results
-# or:
-make demo
+# 1. Convert exports to the turn schema. Read the dry-run report first.
+python -m cdm.ingest --format dir --input transcripts/ \
+    --model "gpt-4o-2024-11-20" --roster roster.csv --dry-run
+python -m cdm.ingest --format dir --input transcripts/ \
+    --model "gpt-4o-2024-11-20" --roster roster.csv --out student_logs.jsonl
+
+# 2. Score, derive norm-referenced thresholds, diagnose flat features.
+python run_pilot.py --logs student_logs.jsonl --profile hpc --outdir results_pilot
+
+# 3. Once a double-coded subset exists, calibrate and report agreement.
+python run_pilot.py --logs student_logs.jsonl --profile hpc \
+    --human human_items.csv --outdir results_pilot
 ```
 
-Options:
+- Every turn needs `session_id`, `student`, `role`, `turn` and `content`, plus a
+  pinned `model` identifier; model version is a confound, so a corpus without
+  it cannot support cohort comparison. Use `--model` if the export lacks one.
+- `--roster` pseudonymises students and writes a crosswalk file. Keep that file
+  **outside** the repository; it maps pseudonyms back to real students.
+- Use `--profile hpc` for HPC/PDC coursework. The `general` lexicon looks for
+  patients, clients and citations and will report flat ethics features on HPC
+  transcripts.
+- Without `--human`, scores are norm-referenced: they rank students within
+  the corpus and mean nothing outside it. Thresholds do not transfer between
+  corpora, so derivation is a required step on every new corpus.
+- An item counts as automated only if it reaches weighted κ ≥ 0.80 against
+  human coding, the same standard applied to the coders.
 
-| Flag | Default | Meaning |
-|---|---|---|
-| `--n-per-group` | `10` | Simulated students per discipline (total = 3 × this) |
-| `--seed` | `20260617` | Random seed for reproducibility |
-| `--outdir` | `.` | Directory for the report, dataset, and figures |
+Full walkthrough: [`docs/pilot_workflow.md`](docs/pilot_workflow.md).
 
-### Outputs
+## Running the psychometric report on real item scores
 
-Each run writes:
+`cdm/pipeline.py` currently runs only on simulated data from
+`model_core.simulate()`; there is no command-line option to load real item
+scores yet. To run it on coded data, replace `simulate()` with a loader that
+returns the same three frames (item scores, per-coder scores, think-aloud
+codes) with the columns documented in
+[`docs/data_dictionary.md`](docs/data_dictionary.md). The simulated groups are
+three placeholder disciplines (Business, HealthSciences, Humanities) inherited
+from the original cross-discipline design; the grouping variable for the
+revised HPC protocol is defined by the approved pilot design.
 
-- `cdm_pipeline_report.txt` — the full stamped statistical report
-- `cdm_simulated_dataset.csv` — the generated dataset (`DATA_PROVENANCE = SIMULATED`)
-- `fig_dimension_means.png`, `fig_dimension_correlations.png` — figures
-
-A reference copy of these is in [`examples/expected_output/`](examples/expected_output/).
-
-## Demonstration results (simulated)
-
-On the pilot design (N = 30), the pipeline recovers the injected discipline
-pattern (MANOVA), and the emergent reliability and validity statistics fall within
-their intended ranges. The most useful result is the **confirmatory factor
-analysis as a function of sample size** — the same model, varying only N:
-
-| Sample size | Comparative Fit Index |
-|---|---|
-| N = 30 (pilot) | 0.48 — underpowered |
-| N = 120 | 0.92 — acceptable |
-| N = 240 | 0.99 — clean fit |
-
-This provides the quantitative case for scaling the confirmed study to at least
-120 participants. Full narrative in
-[`docs/results_demonstration.md`](docs/results_demonstration.md). As above, these
-are pipeline-demonstration outputs on simulated data, not empirical findings.
-
-## Adapting to real data
-
-The analysis code is designed to run unchanged on real data. Only
-`cdm/model_core.py` changes: replace `simulate()` with a loader that returns the
-same columns from the real, IRB-approved collection. Real data collection is out
-of scope for this repository and requires Institutional Review Board approval.
-
-## Testing
+## Simulated demonstrations
 
 ```bash
-python -m pytest -q      # or: make test
+make demo                        # psychometric report -> results/
+python run_log_demo.py           # transcript path on simulated logs -> results_logs/
+make controls-quick              # smoke test of the design-time controls
+make controls                    # full controls: 500 reps, 50 sweep reps per N
 ```
+
+The psychometric demo reproduces [`examples/expected_output/`](examples/expected_output/)
+exactly. Its confirmatory factor analysis at pilot scale (N = 30) gives
+CFI 0.477 and RMSEA 0.192 (not estimable), against CFI 0.991 and RMSEA 0.018
+at N = 240. `run_controls.py` gives the full fit-by-N curve with replication
+bands, which is the version to report.
+
+The single-factor control compares the five-factor model against a one-factor
+model using the χ² difference test and χ²-based AIC/BIC, not CFI: the
+five-factor model nests the one-factor model, so both fit one-factor data
+equally well and a CFI comparison cannot discriminate them.
+
+None of these outputs is evidence about students.
 
 ## Data availability
 
-This repository distributes **only simulated data**. No participant data —
-real or identifiable — are included, and none should ever be committed (see
+This repository distributes **only simulated data**. No participant data — real
+or identifiable — are included, and none should ever be committed (see
 `.gitignore`).
 
 ## Citation

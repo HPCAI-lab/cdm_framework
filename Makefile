@@ -18,3 +18,18 @@ test:
 
 clean:
 	rm -rf results out __pycache__ cdm/__pycache__ tests/__pycache__ .pytest_cache
+
+pilot:
+	python run_pilot.py --logs $(LOGS) --profile $(PROFILE) --outdir results_pilot
+
+controls:
+	python run_controls.py --outdir results_controls --reps 500 --sweep-reps 50
+
+controls-quick:
+	python run_controls.py --quick --outdir results_controls
+
+ingest-dry:
+	python -m cdm.ingest --format $(FORMAT) --input $(INPUT) --dry-run
+
+PROFILE ?= hpc
+.PHONY: pilot controls controls-quick ingest-dry

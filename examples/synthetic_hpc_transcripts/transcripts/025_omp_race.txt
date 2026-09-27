@@ -1,0 +1,91 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: Can you find the bug in my OpenMP matmul?
+
+I also want it optimized better.
+
+```c
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Please keep the i-j-k loops and the 2D arrays, and it has to be correct.
+
+I think there are two parts: finding which variables are shared and fixing the data-sharing clauses.
+
+Just look at the data-sharing bug in this function.
+
+Our instructor said we can use AI for debugging but not for writing whole solutions. Does that cover you rewriting my pragma? If not, just explain the problem and I'll write the fix myself.
+
+(I left out my username and the node hostname on purpose) because that's login and account information.
+
+Assistant: Wrap the update in #pragma omp critical so only one thread changes sum at a time.
+
+Student: That won't work: a critical section would serialize the inner loop and throw away the speedup, and it still leaves j and k shared. The variables just need to be private.
+
+Can you try again?
+
+Assistant: Agreed, the critical section serializes the work and doesn't fix j and k. private(j, k, sum) is the right fix.
+
+sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Student: Can you explain why declaring sum inside the loop makes it private, and where the spec says that?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+You could also use the OpenMP 'atomicprivate' clause.
+
+Student: There's no atomicprivate clause in the OpenMP 5.2 spec, and gcc rejects it.
+
+Assistant: Correct, atomicprivate isn't an OpenMP clause; I shouldn't have suggested it. private(j, k, sum) is what you want.
+
+Student: I compared it against the OMP_NUM_THREADS=1 run and it matches.
+
+After the fix I reran 1, 2, 8 and 16 threads, N=17 and N=2048 to make sure it's still correct everywhere and that the fix didn't introduce a new problem or slow it down.
+
+I'm not worried about the naming or the comments, but I want to check the part about measuring speedup and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: oh ok, I'll go with that then
+
+For reference, perf stat shows IPC dropping from 2.1 to 0.6 at 8 threads with the critical section.
+
+That advice assumes the Intel compiler; we only have gcc here, so I'd rather keep the fix portable and ignore the compiler switch.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Fair, that claim depends on the setup; check it on your system before relying on it.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: so basically the threads mess it up
+
+I'll try not to hog the node.
+
+I'll say I used AI in the lab notes.
+
+Assistant: Sounds good. Good luck with the rest of it.

@@ -1,0 +1,93 @@
+SYNTHETIC TEST TRANSCRIPT - generated from templates for pipeline testing. Not student data.
+
+Student: can you fix my OpenMP matmul
+
+idk its some parallel stuff, can u make it better
+
+First the data-sharing bug, then the speedup.
+
+Just look at the data-sharing bug in this function.
+
+here's how I run it on the node:
+ssh fkhan@node07.hpc.example.edu
+export OMP_NUM_THREADS=8 && ./mm 2048
+
+Assistant: Could you paste the relevant code and describe exactly what goes wrong?
+
+Student: ```c
+double sum;
+int i, j, k;
+#pragma omp parallel for
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+Assistant: Wrap the update in #pragma omp critical so only one thread changes sum at a time.
+
+Student: I'm not sure that's right, it still looks wrong to me.
+
+ok
+
+Can you tell me how fast it will run on 16 threads?
+
+Assistant: Agreed, the critical section serializes the work and doesn't fix j and k. private(j, k, sum) is the right fix.
+
+sum, j and k are declared outside the parallel region, so all threads share them and overwrite each other's values. Make them private: declare them inside the loop, or add private(j, k, sum) to the pragma.
+
+```c
+#pragma omp parallel for private(j, k, sum)
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++) {
+        sum = 0.0;
+        for (k = 0; k < N; k++) sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+I can't run code on your system, so I can't measure the speedup; if you run it and share the timings I can help interpret them.
+
+Student: ok, here are my timings then: N=2048: 1 thread 38.0 s, 4 threads 10.4 s, 8 threads 6.3 s.
+
+Assistant: Thanks, that's useful. Those numbers show the scaling flattening out; we can look at why once the result is correct.
+
+Student: Can you explain why declaring sum inside the loop makes it private, and where the spec says that?
+
+Why does it work with one thread?
+
+Assistant: Variables declared inside the parallel region are private by default; the OpenMP specification's data-sharing attribute rules cover this.
+
+With one thread there's nobody to share sum with, so no update is lost.
+
+Student: ok, I'll check that against the documentation.
+
+Assistant: Good idea.
+
+Student: I checked it against the OMP_NUM_THREADS=1 run: C matches element by element across 10 runs with 8 threads.
+
+I reran the failing case and a couple of others (1).
+
+I'm not worried about the naming or the comments, but I want to check the part about measuring speedup and any speedup numbers carefully myself.
+
+Assistant: That sounds right.
+
+One more thing: The critical section adds only a small overhead here.
+
+For best results compile with the Intel compiler and -qopenmp.
+
+Student: I'm not sure that's right, my numbers looked different. Can you check again?
+
+For reference, perf stat shows IPC dropping from 2.1 to 0.6 at 8 threads with the critical section.
+
+Assistant: Good point. The measurement is better evidence than my estimate, so go with what you measured.
+
+Student: Can you summarize in two sentences what the bug was?
+
+Assistant: The loop variables j and k and the accumulator sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums and indices.
+
+Student: So j, k and sum are shared because they were declared outside the parallel region, so threads overwrite each other's partial sums.
+
+Assistant: Sounds good. Good luck with the rest of it.
