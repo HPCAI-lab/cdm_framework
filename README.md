@@ -13,7 +13,6 @@ conversational model in the loop. The repository carries three things:
    item scores.
 3. **Design-time evidence.** A declared generative model plus negative controls,
    power curves and a fit-by-sample-size sweep, run before any real data exist.
-
 ---
 
 ## The CDM instrument
