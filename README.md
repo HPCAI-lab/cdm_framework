@@ -14,14 +14,6 @@ conversational model in the loop. The repository carries three things:
 3. **Design-time evidence.** A declared generative model plus negative controls,
    power curves and a fit-by-sample-size sweep, run before any real data exist.
 
-> [!IMPORTANT]
-> **This repository contains simulated data only.** Every statistic produced by
-> the demonstrations emerges from a declared generative model plus sampling
-> noise; the structural assumptions are inputs, not results. Simulated
-> artifacts are stamped `SIMULATED`, and automated scores carry their
-> calibration state (uncalibrated, norm-referenced, or calibrated). See
-> [`docs/methodology.md`](docs/methodology.md) for the integrity statement.
-
 ---
 
 ## The CDM instrument
